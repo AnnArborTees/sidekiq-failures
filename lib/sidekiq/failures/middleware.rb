@@ -17,13 +17,7 @@ module Sidekiq
         msg['processor'] = identity
         msg['failed_at'] = Time.now.utc.to_f
 
-        if msg['backtrace'] == true
-          msg['error_backtrace'] = e.backtrace
-        elsif msg['backtrace'] == false
-          # do nothing
-        elsif msg['backtrace'].to_i != 0
-          msg['error_backtrace'] = e.backtrace[0..msg['backtrace'].to_i]
-        end
+        msg['error_backtrace'] = e.backtrace
 
         payload = Sidekiq.dump_json(msg)
         Sidekiq.redis do |conn|
