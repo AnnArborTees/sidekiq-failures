@@ -5,6 +5,7 @@ rescue LoadError
 end
 
 require "sidekiq/api"
+require "sidekiq/version"
 require "sidekiq/failures/version"
 require "sidekiq/failures/sorted_entry"
 require "sidekiq/failures/failure_set"
@@ -47,9 +48,11 @@ module Sidekiq
 
   # Fetches the failures max count value
   def self.failures_max_count
-    return 1000 if @failures_max_count.nil?
-
-    @failures_max_count
+    if !instance_variable_defined?(:@failures_max_count) || @failures_max_count.nil?
+      1000
+    else
+      @failures_max_count
+    end
   end
 
   module Failures
@@ -62,12 +65,23 @@ module Sidekiq
     def self.count
       Sidekiq.redis {|r| r.zcard(LIST_KEY) }
     end
+
+    def self.retry_middleware_class
+      if Gem::Version.new(Sidekiq::VERSION) >= Gem::Version.new('5.0.0')
+        require 'sidekiq/job_retry'
+        Sidekiq::JobRetry
+      else
+        require 'sidekiq/middleware/server/retry_jobs'
+        Sidekiq::Middleware::Server::RetryJobs
+      end
+    end
+
   end
 end
 
 Sidekiq.configure_server do |config|
   config.server_middleware do |chain|
-    chain.insert_before Sidekiq::Middleware::Server::RetryJobs,
+    chain.insert_before Sidekiq::Failures.retry_middleware_class,
                         Sidekiq::Failures::Middleware
   end
 end
